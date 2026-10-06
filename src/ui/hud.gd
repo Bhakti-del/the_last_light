@@ -36,6 +36,7 @@ var _torch_bar: ColorRect
 var _torch_fill: ColorRect
 var _keys_label: Label
 var _kid_toggle: CheckButton
+var _compass: Label
 
 var _journal: PanelContainer
 var _journal_list: VBoxContainer
@@ -140,6 +141,7 @@ func _build() -> void:
 	_build_objective()
 	_build_torch()
 	_build_notice()
+	_build_compass()
 	_build_room_title()
 	_build_journal()
 	_build_reader()
@@ -226,6 +228,21 @@ func _build_room_title() -> void:
 	_room_title.modulate.a = 0.0
 	_room_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_room_title)
+
+
+
+
+func _build_compass() -> void:
+	_compass = Label.new()
+	_compass.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_compass.position = Vector2(-180, 26)
+	_font(_compass, 15)
+	_compass.add_theme_color_override("font_color", DIM)
+	_compass.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_compass.add_theme_constant_override("outline_size", 5)
+	_compass.text = "N  E  S  W"
+	_compass.visible = true
+	_root.add_child(_compass)
 
 
 func _build_journal() -> void:
@@ -535,6 +552,22 @@ func _process(delta: float) -> void:
 	else:
 		_room_title.modulate.a = move_toward(_room_title.modulate.a, 0.0, delta * 2.0)
 
+
+	# Compass
+	if _compass != null:
+		var player = get_tree().get_first_node_in_group("player")
+		if player == null:
+			var scene = get_tree().current_scene
+			player = scene.get_node_or_null("Player") if scene != null else null
+		if player != null and is_instance_valid(player):
+			var yaw = player.global_transform.basis.get_euler().y
+			var deg = fmod(rad_to_deg(yaw), 360.0)
+			if deg < 0.0: deg += 360.0
+			# map to N=0, E=90 etc (standard)
+			var dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+			var idx = int(round(deg / 45.0)) % 8
+			_compass.text = "%03d° %s" % [int(round(deg)) % 360, dirs[idx]]
+			_compass.modulate.a = 0.95
 	if _title.visible:
 		var go := _title.find_child("GoLabel", true, false) as Label
 		if go != null:

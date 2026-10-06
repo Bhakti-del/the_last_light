@@ -32,6 +32,7 @@ var front_door: Door = null
 var back_door: Door = null
 var rune_lock: RuneLock = null
 var hatch_pivot: Node3D = null
+var bed_body: AnimatableBody3D = null
 var final_chair: Interactable = null
 var practicals: Array = []
 
@@ -311,6 +312,8 @@ func _build_stairs() -> void:
 	var drop := y0 - y1
 	var rise := drop / float(STAIR_STEPS)
 	var step_run := run / float(STAIR_STEPS)
+	var mid_z := h.position.y + run * 0.5
+	var mid_y := (y0 + y1) * 0.5
 
 	# --- visible nosings. The ramp below carries the player, so these are
 	# thin caps whose top sits on the ramp surface at their own centre: the
@@ -324,34 +327,37 @@ func _build_stairs() -> void:
 			"metal" if i % 2 == 0 else "rust")
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
-	# --- the ramp collider. rotation.x is positive so the +Z (south) end drops.
-	var mid_z := h.position.y + run * 0.5
-	var length := Vector2(run, drop).length()
-	var pitch := atan2(drop, run)
-	var mid_y := (y0 + y1) * 0.5
-	var ramp := _solid(Vector3(h.size.x - 0.16, 0.30, length),
-		Vector3(h.position.x + h.size.x * 0.5, mid_y - 0.10, mid_z))
-	ramp.rotation.x = pitch
+	# --- visible steps. Build actual steps down the slope
+	for i in STAIR_STEPS:
+		var z := h.position.y + step_run * float(i) + step_run * 0.5
+		var y := y0 - rise * float(i)  # step height level
+		# full step tread
+		_solidbox(Vector3(h.size.x - 0.16, rise, step_run),
+			Vector3(h.position.x + h.size.x * 0.5, y - rise * 0.5, z),
+			"metal" if i % 2 == 0 else "rust")
+		# nosing for visibility
+		_box(Vector3(h.size.x - 0.16, 0.08, 0.08),
+			Vector3(h.position.x + h.size.x * 0.5, y - 0.04, z + step_run * 0.46),
+			"metal" if i % 2 == 0 else "rust")
 
-	# stringers either side of the ramp, so you cannot slip beside it
+	# stringers either side
 	for sx in [-1.0, 1.0]:
-		_solidbox(Vector3(0.12, 0.72, length),
-			Vector3(h.position.x + h.size.x * 0.5 + sx * (h.size.x * 0.5 - 0.08), mid_y - 0.16, mid_z),
-			"rust").rotation.x = pitch
+		_solidbox(Vector3(0.12, abs(drop) + 0.2, run),
+			Vector3(h.position.x + h.size.x * 0.5 + sx * (h.size.x * 0.5 - 0.08), mid_y - 0.05, mid_z),
+			"rust")
 
-	# --- rails follow the slope, with a post at each end
+	# rails
 	var rail_h := 1.0
 	for sx in [-1.0, 1.0]:
 		var x := h.position.x + (0.06 if sx < 0.0 else h.size.x - 0.06)
-		_solidbox(Vector3(0.08, 0.08, length), Vector3(x, mid_y + rail_h - 0.10, mid_z),
-			"rust").rotation.x = pitch
-		for s in [-1.0, 1.0]:
-			# post: from the ramp surface up to the rail
-			var pz := mid_z + (0.10 if s > 0.0 else -0.10) * length
-			var py := mid_y - (0.10 if s > 0.0 else -0.10) * (drop / run)
+		_solidbox(Vector3(0.08, 0.08, run), Vector3(x, y1 + rail_h + 0.4, mid_z), "rust")
+		# posts down the length roughly
+		for j in range(4):
+			var pz := h.position.y + run * (float(j) + 0.2)
+			var py := y0 - drop * (pz - h.position.y) / run
 			_solidbox(Vector3(0.08, rail_h, 0.08), Vector3(x, py + rail_h * 0.5, pz), "rust")
 
-	# closed end (south) at floor level, so the only way down is from the north
+	# closed end (south)
 	_solidbox(Vector3(h.size.x, rail_h, 0.10),
 		Vector3(h.position.x + h.size.x * 0.5, y0 + rail_h * 0.5, h.end.y - 0.05), "rust")
 
@@ -385,8 +391,16 @@ func _build_stairs() -> void:
 func _open_hatch() -> void:
 	if hatch_pivot == null:
 		return
-	var want := deg_to_rad(90.0) if GameState.has_flag("hatch_open") else 0.0
+	var open = GameState.has_flag("hatch_open")
+	var want := deg_to_rad(90.0) if open else 0.0
+	if hatch_pivot.rotation.z == 0.0 and want > 0.0:
+		GameState.push_notice("The hatch opens. Stairs down to the basement.", 3.2)
 	hatch_pivot.rotation.z = want
+	# Move bed down to hatch position when open
+	if open and bed_body != null:
+		# target: in front of hatch (south side of storage room near hatch)
+		var target = Vector3(19.2, -0.8, 4.5)
+		bed_body.global_position = bed_body.global_position.lerp(target, 0.25)
 
 
 func _on_hatch_flag(key: String) -> void:
@@ -456,7 +470,7 @@ func _build_props() -> void:
 
 func _props_bedroom() -> void:
 	# bed against the north-west corner
-	_solidbox(Vector3(1.6, 0.34, 2.1), Vector3(2.6, 0.17, 2.0), "dark_wood")
+	bed_body = _solidbox(Vector3(1.6, 0.34, 2.1), Vector3(2.6, 0.17, 2.0), "dark_wood")
 	_box(Vector3(1.54, 0.24, 2.0), Vector3(2.6, 0.46, 2.0), "cloth_dark")
 	_box(Vector3(1.54, 0.10, 0.7), Vector3(2.6, 0.60, 1.35), "fabric")
 	_box(Vector3(0.9, 0.14, 0.5), Vector3(2.6, 0.63, 2.6), "paper")
