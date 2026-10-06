@@ -154,15 +154,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	if sequence.is_running() or hud.pause_is_open():
 		return
 
+	if hud.reader_is_open():
+		if event.is_action_pressed("interact") or event.is_action_pressed("journal") or event.is_action_pressed("pause"):
+			get_viewport().set_input_as_handled()
+			hud.close_reader()
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		return
+
 	if event.is_action_pressed("pause"):
 		get_viewport().set_input_as_handled()
 		_set_paused(not hud.pause_is_open())
-		return
-
-	if hud.reader_is_open():
-		if event.is_action_pressed("interact") or event.is_action_pressed("journal"):
-			get_viewport().set_input_as_handled()
-			hud.close_reader()
 		return
 
 	if event.is_action_pressed("journal"):

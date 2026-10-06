@@ -241,7 +241,7 @@ func _build_compass() -> void:
 	_compass.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	_compass.add_theme_constant_override("outline_size", 5)
 	_compass.text = "N  E  S  W"
-	_compass.visible = true
+	_compass.visible = false   # compass removed from HUD
 	_root.add_child(_compass)
 
 
@@ -280,32 +280,59 @@ func _build_journal() -> void:
 
 
 func _build_reader() -> void:
+	# PanelContainer provides the paper background and margins.
+	# A VBoxContainer inside it stacks: title → rule → scroll(body) → rule → footer.
 	_reader = _paper_panel()
 	_reader.set_anchors_preset(Control.PRESET_CENTER)
+	_reader.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_reader.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_reader.custom_minimum_size = Vector2(560, 380)
 	_reader.visible = false
 
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_reader.add_child(vbox)
+
 	_reader_title = Label.new()
-	_font(_reader_title, 24)
+	_font(_reader_title, 22)
 	_reader_title.add_theme_color_override("font_color", Color(0.13, 0.11, 0.10))
-	_reader.add_child(_reader_title)
+	_reader_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_reader_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(_reader_title)
 
 	var rule := ColorRect.new()
 	rule.color = Color(0.16, 0.13, 0.12, 0.5)
 	rule.custom_minimum_size = Vector2(0, 2)
-	_reader.add_child(rule)
+	vbox.add_child(rule)
+
+	# ScrollContainer so long notes scroll instead of clipping.
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(0, 200)
+	vbox.add_child(scroll)
 
 	_reader_body = Label.new()
 	_reader_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_font(_reader_body, 18)
+	_reader_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_font(_reader_body, 17)
 	_reader_body.add_theme_color_override("font_color", Color(0.20, 0.17, 0.15))
-	_reader_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_reader.add_child(_reader_body)
+	scroll.add_child(_reader_body)
+
+	var rule2 := ColorRect.new()
+	rule2.color = Color(0.16, 0.13, 0.12, 0.5)
+	rule2.custom_minimum_size = Vector2(0, 2)
+	vbox.add_child(rule2)
 
 	var foot := Label.new()
-	foot.text = "[E] / [ESC] put it down"
-	_font(foot, 16)
-	foot.add_theme_color_override("font_color", Color(0.35, 0.31, 0.28))
-	_reader.add_child(foot)
+	foot.text = "E  or  ESC  —  put it down"
+	_font(foot, 15)
+	foot.add_theme_color_override("font_color", Color(0.40, 0.36, 0.32))
+	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(foot)
+
 	_root.add_child(_reader)
 
 
@@ -553,21 +580,7 @@ func _process(delta: float) -> void:
 		_room_title.modulate.a = move_toward(_room_title.modulate.a, 0.0, delta * 2.0)
 
 
-	# Compass
-	if _compass != null:
-		var player = get_tree().get_first_node_in_group("player")
-		if player == null:
-			var scene = get_tree().current_scene
-			player = scene.get_node_or_null("Player") if scene != null else null
-		if player != null and is_instance_valid(player):
-			var yaw = player.global_transform.basis.get_euler().y
-			var deg = fmod(rad_to_deg(yaw), 360.0)
-			if deg < 0.0: deg += 360.0
-			# map to N=0, E=90 etc (standard)
-			var dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-			var idx = int(round(deg / 45.0)) % 8
-			_compass.text = "%03d° %s" % [int(round(deg)) % 360, dirs[idx]]
-			_compass.modulate.a = 0.95
+	# Compass removed — no per-frame update needed.
 	if _title.visible:
 		var go := _title.find_child("GoLabel", true, false) as Label
 		if go != null:

@@ -315,51 +315,72 @@ func _build_stairs() -> void:
 	var mid_z := h.position.y + run * 0.5
 	var mid_y := (y0 + y1) * 0.5
 
-	# --- visible nosings. The ramp below carries the player, so these are
-	# thin caps whose top sits on the ramp surface at their own centre: the
-	# uphill half buries itself in the ramp and the downhill half reads as a
-	# stair lip.
+	# --- VISUAL-ONLY step treads (no collision — the ramp below carries the player).
+	# Each tread is a thin MeshInstance3D cap; its top sits on the ramp surface so
+	# the uphill half buries itself and the downhill half reads as a stair lip.
 	for i in STAIR_STEPS:
 		var z := h.position.y + step_run * (float(i) + 0.5)
 		var top := y0 - rise * (float(i) + 0.5)
+		# tread cap — visual only, no StaticBody
 		var mi := _box(Vector3(h.size.x - 0.16, 0.14, step_run + 0.01),
 			Vector3(h.position.x + h.size.x * 0.5, top - 0.07, z),
 			"metal" if i % 2 == 0 else "rust")
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-
-	# --- visible steps. Build actual steps down the slope
-	for i in STAIR_STEPS:
-		var z := h.position.y + step_run * float(i) + step_run * 0.5
-		var y := y0 - rise * float(i)  # step height level
-		# full step tread
-		_solidbox(Vector3(h.size.x - 0.16, rise, step_run),
-			Vector3(h.position.x + h.size.x * 0.5, y - rise * 0.5, z),
+		# nosing strip for visual clarity
+		var ni := _box(Vector3(h.size.x - 0.16, 0.06, 0.07),
+			Vector3(h.position.x + h.size.x * 0.5, top - 0.03, z + step_run * 0.47),
 			"metal" if i % 2 == 0 else "rust")
-		# nosing for visibility
-		_box(Vector3(h.size.x - 0.16, 0.08, 0.08),
-			Vector3(h.position.x + h.size.x * 0.5, y - 0.04, z + step_run * 0.46),
-			"metal" if i % 2 == 0 else "rust")
+		ni.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
-	# stringers either side
+	# --- INVISIBLE RAMP — single angled StaticBody3D that the player actually walks on.
+	# Positioned so its top surface aligns with the top edge of step 0 and its bottom
+	# surface aligns with the floor of the basement.
+	var ramp_len := sqrt(run * run + drop * drop)   # hypotenuse
+	var ramp_angle := atan2(drop, run)               # positive → tilts down toward +z
+	var ramp_cx := h.position.x + h.size.x * 0.5
+	var ramp_cz := mid_z
+	var ramp_cy := mid_y + 0.04   # slight nudge up so surface is flush with step tops
+
+	var ramp_body := StaticBody3D.new()
+	ramp_body.collision_layer = 1 << 0
+	ramp_body.collision_mask = 0
+	ramp_body.position = Vector3(ramp_cx, ramp_cy, ramp_cz)
+	ramp_body.rotation.x = ramp_angle   # tilt around X so the top face slopes down +z
+	add_child(ramp_body)
+
+	var ramp_cs := CollisionShape3D.new()
+	var ramp_shape := BoxShape3D.new()
+	# Width = hatch interior; length = hypotenuse of the slope; thickness just enough
+	# to be solid but not poke through the step mesh
+	ramp_shape.size = Vector3(h.size.x - 0.20, 0.18, ramp_len)
+	ramp_cs.shape = ramp_shape
+	ramp_body.add_child(ramp_cs)
+
+	# --- stringers either side (visual + collision as before)
 	for sx in [-1.0, 1.0]:
 		_solidbox(Vector3(0.12, abs(drop) + 0.2, run),
 			Vector3(h.position.x + h.size.x * 0.5 + sx * (h.size.x * 0.5 - 0.08), mid_y - 0.05, mid_z),
 			"rust")
 
-	# rails
+	# --- rails
 	var rail_h := 1.0
 	for sx in [-1.0, 1.0]:
 		var x := h.position.x + (0.06 if sx < 0.0 else h.size.x - 0.06)
 		_solidbox(Vector3(0.08, 0.08, run), Vector3(x, y1 + rail_h + 0.4, mid_z), "rust")
-		# posts down the length roughly
 		for j in range(4):
 			var pz := h.position.y + run * (float(j) + 0.2)
 			var py := y0 - drop * (pz - h.position.y) / run
 			_solidbox(Vector3(0.08, rail_h, 0.08), Vector3(x, py + rail_h * 0.5, pz), "rust")
 
-	# closed end (south)
+	# --- closed end (south wall of stairwell)
 	_solidbox(Vector3(h.size.x, rail_h, 0.10),
 		Vector3(h.position.x + h.size.x * 0.5, y0 + rail_h * 0.5, h.end.y - 0.05), "rust")
+
+	# --- thin landing pad at the basement end so the player doesn't fall through the gap
+	# between the ramp bottom and the basement floor
+	_solidbox(Vector3(h.size.x - 0.16, 0.14, 0.60),
+		Vector3(h.position.x + h.size.x * 0.5, y1 + 0.07, h.end.y - 0.35),
+		"floor_concrete")
 
 	# --- the hatch cover. Hinged along its WEST edge and swung up against the
 	# stairwell rail: a north-hinged cover this long (4.3 m) could not open without
