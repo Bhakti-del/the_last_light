@@ -170,6 +170,14 @@ func _test_rune_puzzle() -> void:
 	ok(player2.global_position.y < -1.0,
 		"player descends into basement via ramp (y=%.2f)" % player2.global_position.y)
 
+	# Player must also be able to climb back up from the bottom trigger
+	player2.global_position = Vector3(h2.position.x + h2.size.x * 0.5, LevelData.BASEMENT_Y + 0.3, h2.end.y - 0.5)
+	player2.velocity = Vector3.ZERO
+	for i in 30:
+		await get_tree().physics_frame
+	ok(player2.global_position.y > -1.0,
+		"player teleports back up from basement trigger (y=%.2f)" % player2.global_position.y)
+
 
 # -------------------------------------------------------------- the doors
 

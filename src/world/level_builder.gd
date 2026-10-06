@@ -420,6 +420,27 @@ func _open_hatch() -> void:
 	GameState.push_notice("The hatch swings open.", 3.0)
 	GameState.set_objective_key("basement")
 
+	var h: Rect2 = LevelData.HATCH
+	var cx := h.position.x + h.size.x * 0.5
+
+	# --- Top trigger: walking over the hatch lip sends the player to the bottom
+	var top_tz := ZoneTrigger.box(
+		Vector3(cx, 0.0, h.position.y + 0.5),
+		Vector3(h.size.x - 0.20, 1.2, 1.0))
+	top_tz.once = false
+	top_tz.teleport_to = Vector3(cx, LevelData.BASEMENT_Y + 0.3, h.end.y - 1.0)
+	top_tz.subtitle = ""
+	add_child(top_tz)
+
+	# --- Bottom trigger: walking to the base of the stairs sends the player back up
+	var bot_tz := ZoneTrigger.box(
+		Vector3(cx, LevelData.BASEMENT_Y + 0.3, h.end.y - 0.5),
+		Vector3(h.size.x - 0.20, 1.2, 1.0))
+	bot_tz.once = false
+	bot_tz.teleport_to = Vector3(cx, 0.2, h.position.y + 1.5)
+	bot_tz.subtitle = ""
+	add_child(bot_tz)
+
 
 func _on_hatch_flag(key: String) -> void:
 	if key == "hatch_open":
