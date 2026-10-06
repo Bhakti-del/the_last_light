@@ -208,9 +208,12 @@ func _build_shells() -> void:
 		Vector3(br.position.x + br.size.x * 0.5, by - FLOOR_THICK * 0.5, br.position.y + br.size.y * 0.5),
 		"floor_concrete")
 	_build_walls("basement", "wall_concrete")
-	_solidbox(Vector3(br.size.x, CEIL_THICK, br.size.y),
-		Vector3(br.position.x + br.size.x * 0.5, by + LevelData.ceil_h("basement") + CEIL_THICK * 0.5,
-			br.position.y + br.size.y * 0.5), "ceiling")
+	# Basement ceiling has the hatch cut out so the stairwell is open
+	for piece in subtract(br, LevelData.HATCH):
+		_solidbox(Vector3(piece.size.x, CEIL_THICK, piece.size.y),
+			Vector3(piece.position.x + piece.size.x * 0.5,
+				by + LevelData.ceil_h("basement") + CEIL_THICK * 0.5,
+				piece.position.y + piece.size.y * 0.5), "ceiling")
 
 
 func _slab_top(size: Vector3, pos: Vector3, mat: String) -> void:
@@ -324,20 +327,35 @@ func _build_stairs() -> void:
 			"metal" if i % 2 == 0 else "rust")
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
-	# Ramp: single angled slab.  The BoxShape centre is at mid_y, mid_z.
-	# rotation.x = +angle tilts so that the face at -Z/2 is high (y0) and
-	# the face at +Z/2 is low (y1).
-	var ramp_len := sqrt(run * run + drop * drop)
-	var ramp_angle := atan2(drop, run)   # ~39 deg
+	# Ramp: a wedge-shaped ConvexPolygonShape3D so the slope is baked into
+	# the vertex positions — no rotation transform needed, no physics sync issues.
+	# The wedge spans the full hatch width and exactly connects y=0,z=h.position.y
+	# (top/north) to y=BASEMENT_Y,z=h.end.y (bottom/south).
+	var wx := (h.size.x - 0.20) * 0.5   # half-width in X
+	var zt := h.position.y               # z at top (north)
+	var zb := h.end.y                    # z at bottom (south)
+	var yt := 0.0                        # y at top
+	var yb := y1                         # y at bottom = BASEMENT_Y
+	var slab := 0.30                     # slab thickness
+	# 8 vertices of the wedge (thick slab whose top face is the slope)
+	var verts := PackedVector3Array([
+		Vector3(-wx, yt,        zt),
+		Vector3( wx, yt,        zt),
+		Vector3( wx, yb,        zb),
+		Vector3(-wx, yb,        zb),
+		Vector3(-wx, yt - slab, zt),
+		Vector3( wx, yt - slab, zt),
+		Vector3( wx, yb - slab, zb),
+		Vector3(-wx, yb - slab, zb),
+	])
 	var ramp_body := StaticBody3D.new()
 	ramp_body.collision_layer = 1 << 0
 	ramp_body.collision_mask = 0
-	ramp_body.position = Vector3(h.position.x + h.size.x * 0.5, mid_y, mid_z)
-	ramp_body.rotation.x = ramp_angle
+	ramp_body.position = Vector3.ZERO   # vertices are already in world-local coords of LevelBuilder
 	add_child(ramp_body)
 	var ramp_cs := CollisionShape3D.new()
-	var ramp_shape := BoxShape3D.new()
-	ramp_shape.size = Vector3(h.size.x - 0.20, 0.25, ramp_len)
+	var ramp_shape := ConvexPolygonShape3D.new()
+	ramp_shape.points = verts
 	ramp_cs.shape = ramp_shape
 	ramp_body.add_child(ramp_cs)
 

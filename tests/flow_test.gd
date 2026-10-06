@@ -159,6 +159,17 @@ func _test_rune_puzzle() -> void:
 	await get_tree().physics_frame
 	ok(not level.hatch_pivot.visible, "hatch cover becomes invisible after solving")
 
+	# Player must physically descend into the basement after the hatch opens.
+	var player2: Player = _main.get("player")
+	var h2: Rect2 = LevelData.HATCH
+	player2.global_position = Vector3(h2.position.x + h2.size.x * 0.5, 0.5, h2.position.y + 0.5)
+	player2.velocity = Vector3.ZERO
+	player2.can_move = true
+	for i in 180:
+		await get_tree().physics_frame
+	ok(player2.global_position.y < -1.0,
+		"player descends into basement via ramp (y=%.2f)" % player2.global_position.y)
+
 
 # -------------------------------------------------------------- the doors
 
