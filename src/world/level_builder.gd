@@ -32,7 +32,7 @@ var front_door: Door = null
 var back_door: Door = null
 var rune_lock: RuneLock = null
 var hatch_pivot: Node3D = null
-var bed_body: AnimatableBody3D = null
+var bed_body: StaticBody3D = null
 var final_chair: Interactable = null
 var practicals: Array = []
 
