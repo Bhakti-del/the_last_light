@@ -305,17 +305,17 @@ func _build_walls(room: String, mat: String) -> void:
 # ============================================================ basement stair
 
 func _build_stairs() -> void:
-	var h: Rect2 = LevelData.HATCH
+	var h: Rect2 = LevelData.HATCH   # x: 18.8..21.2,  z: 1.9..6.3
 	var y0 := 0.0
-	var y1 := LevelData.BASEMENT_Y
-	var run := h.size.y
-	var drop := y0 - y1
+	var y1 := LevelData.BASEMENT_Y   # -3.6
+	var run := h.size.y              # 4.4 m along Z
+	var drop := y0 - y1             # 3.6 m drop
 	var rise := drop / float(STAIR_STEPS)
 	var step_run := run / float(STAIR_STEPS)
 	var mid_z := h.position.y + run * 0.5
-	var mid_y := (y0 + y1) * 0.5
+	var mid_y := (y0 + y1) * 0.5   # -1.8
 
-	# --- visual step treads (no collision)
+	# visual-only step treads
 	for i in STAIR_STEPS:
 		var z := h.position.y + step_run * (float(i) + 0.5)
 		var top := y0 - rise * (float(i) + 0.5)
@@ -324,64 +324,61 @@ func _build_stairs() -> void:
 			"metal" if i % 2 == 0 else "rust")
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
-	# --- invisible ramp the player slides down
+	# Ramp: single angled slab.  The BoxShape centre is at mid_y, mid_z.
+	# rotation.x = +angle tilts so that the face at -Z/2 is high (y0) and
+	# the face at +Z/2 is low (y1).
 	var ramp_len := sqrt(run * run + drop * drop)
-	var ramp_angle := atan2(drop, run)
+	var ramp_angle := atan2(drop, run)   # ~39 deg
 	var ramp_body := StaticBody3D.new()
 	ramp_body.collision_layer = 1 << 0
 	ramp_body.collision_mask = 0
-	ramp_body.position = Vector3(h.position.x + h.size.x * 0.5, mid_y + 0.05, mid_z)
+	ramp_body.position = Vector3(h.position.x + h.size.x * 0.5, mid_y, mid_z)
 	ramp_body.rotation.x = ramp_angle
 	add_child(ramp_body)
 	var ramp_cs := CollisionShape3D.new()
 	var ramp_shape := BoxShape3D.new()
-	ramp_shape.size = Vector3(h.size.x - 0.20, 0.20, ramp_len)
+	ramp_shape.size = Vector3(h.size.x - 0.20, 0.25, ramp_len)
 	ramp_cs.shape = ramp_shape
 	ramp_body.add_child(ramp_cs)
 
-	# --- stringers either side
+	# Side walls of stairwell (keep player from falling off sides)
 	for sx in [-1.0, 1.0]:
-		_solidbox(Vector3(0.12, abs(drop) + 0.2, run),
-			Vector3(h.position.x + h.size.x * 0.5 + sx * (h.size.x * 0.5 - 0.08),
+		_solidbox(Vector3(0.15, drop + 0.3, run),
+			Vector3(h.position.x + h.size.x * 0.5 + sx * (h.size.x * 0.5 - 0.06),
 				mid_y - 0.05, mid_z), "rust")
 
-	# --- rails
-	var rail_h := 1.0
-	for sx in [-1.0, 1.0]:
-		var x := h.position.x + (0.06 if sx < 0.0 else h.size.x - 0.06)
-		_solidbox(Vector3(0.08, 0.08, run), Vector3(x, y1 + rail_h + 0.4, mid_z), "rust")
-		for j in range(4):
-			var pz := h.position.y + run * (float(j) + 0.2)
-			var py := y0 - drop * (pz - h.position.y) / run
-			_solidbox(Vector3(0.08, rail_h, 0.08), Vector3(x, py + rail_h * 0.5, pz), "rust")
+	# Ceiling over stairwell (north wall of storage) — just the south side
+	_solidbox(Vector3(h.size.x, 0.3, 0.15),
+		Vector3(h.position.x + h.size.x * 0.5, y0 + 0.15, h.end.y - 0.08), "rust")
 
-	# --- closed south end
-	_solidbox(Vector3(h.size.x, rail_h, 0.10),
-		Vector3(h.position.x + h.size.x * 0.5, y0 + rail_h * 0.5, h.end.y - 0.05), "rust")
+	# Basement landing
+	_solidbox(Vector3(h.size.x - 0.16, 0.15, 0.80),
+		Vector3(h.position.x + h.size.x * 0.5, y1 + 0.08, h.end.y - 0.45), "floor_concrete")
 
-	# --- landing pad at bottom
-	_solidbox(Vector3(h.size.x - 0.16, 0.14, 0.60),
-		Vector3(h.position.x + h.size.x * 0.5, y1 + 0.07, h.end.y - 0.35), "floor_concrete")
-
-	# --- hatch cover: a flat metal lid sitting over the hole.
-	# When the rune lock is solved it becomes invisible + non-collidable.
+	# Hatch cover — stored as hatch_pivot so _open_hatch can hide it
 	var cover_w := h.size.x - 0.10
 	var cover_d := h.size.y - 0.10
 	hatch_pivot = Node3D.new()
-	hatch_pivot.position = Vector3(h.position.x + h.size.x * 0.5, y0 + 0.05, h.position.y + h.size.y * 0.5)
+	hatch_pivot.name = "HatchCover"
+	hatch_pivot.position = Vector3(h.position.x + h.size.x * 0.5, y0 + 0.06, h.position.y + h.size.y * 0.5)
 	add_child(hatch_pivot)
-	_hatch_cover_size = Vector3(cover_w, 0.10, cover_d)
-	var cover := _solid(_hatch_cover_size, Vector3.ZERO, hatch_pivot)
+
+	# Collision body for the cover (blocks the hole when locked)
+	var cover_body := _solid(Vector3(cover_w, 0.12, cover_d), Vector3.ZERO, hatch_pivot)
+	cover_body.name = "CoverBody"
+
+	# Visible mesh
 	var cm := MeshInstance3D.new()
 	var cb := BoxMesh.new()
-	cb.size = _hatch_cover_size
+	cb.size = Vector3(cover_w, 0.12, cover_d)
 	cm.mesh = cb
 	cm.material_override = _mats["metal"]
 	hatch_pivot.add_child(cm)
+
+	# Plank decoration
 	for i in 3:
-		_box(Vector3(cover_w - 0.08, 0.05, 0.07),
-			Vector3(0, 0.07, -cover_d * 0.5 + 0.6 + float(i) * (cover_d - 1.0) / 2.5),
-			"rust", hatch_pivot)
+		var strip_z := -cover_d * 0.5 + 0.5 + float(i) * (cover_d - 0.8) / 2.0
+		_box(Vector3(cover_w - 0.08, 0.06, 0.12), Vector3(0, 0.09, strip_z), "rust", hatch_pivot)
 
 	if not _hatch_wired:
 		_hatch_wired = true
@@ -389,47 +386,21 @@ func _build_stairs() -> void:
 	_open_hatch()
 
 
-## When hatch_open flag fires: hide the cover, disable its collision,
-## add a teleport ZoneTrigger at the lip so walking over it drops the player
-## to the top of the ramp inside the basement stairwell.
+## Called at startup (cover stays) and when "hatch_open" flag fires (cover vanishes).
 func _open_hatch() -> void:
 	if hatch_pivot == null:
 		return
-	var open: bool = GameState.has_flag("hatch_open")
-	if not open:
+	if not GameState.has_flag("hatch_open"):
 		return
 
-	# hide and disable the cover
+	# Make the cover invisible and non-collidable
 	hatch_pivot.visible = false
 	for child in hatch_pivot.get_children():
 		if child is StaticBody3D:
-			child.collision_layer = 0
-			child.collision_mask = 0
+			(child as StaticBody3D).collision_layer = 0
 
-	GameState.push_notice("The hatch opens. Stairs lead down to the basement.", 3.5)
+	GameState.push_notice("The hatch swings open.", 3.0)
 	GameState.set_objective_key("basement")
-
-	# Teleport zone: a thin slab over the north half of the hatch opening.
-	# Walking into it sends the player to the top of the stair ramp.
-	var h: Rect2 = LevelData.HATCH
-	# top of ramp = just inside the hatch, slightly below floor level
-	var ramp_top := Vector3(h.position.x + h.size.x * 0.5, -0.4, h.position.y + 0.6)
-
-	var tz := ZoneTrigger.new()
-	tz.monitoring = true
-	tz.once = false   # allow repeated use going up and down
-	tz.teleport_to = ramp_top
-	tz.subtitle = ""
-	var cs := CollisionShape3D.new()
-	var bs := BoxShape3D.new()
-	bs.size = Vector3(h.size.x - 0.20, 0.60, 0.80)
-	cs.shape = bs
-	cs.position = Vector3(0, 0.30, 0)
-	tz.add_child(cs)
-	tz.position = Vector3(h.position.x + h.size.x * 0.5, 0.0, h.position.y + 0.40)
-	tz.collision_layer = 0
-	tz.collision_mask = 1 << 1
-	add_child(tz)
 
 
 func _on_hatch_flag(key: String) -> void:
