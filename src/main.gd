@@ -83,10 +83,9 @@ func _start_attempt(fresh: bool) -> void:
 	creature.player = player
 	creature.flashlight = player.flashlight
 	world.add_child(creature)
-	# Spawn in the hallway so the player encounters it on the ground floor
 	creature.spawn_at(Vector3(13.0, 0.0, 4.6))
-	creature.set_enabled(true)
-	creature.grant_grace(10.0)
+	creature.set_enabled(false)   # disabled — not part of current playthrough
+	creature.grant_grace(99999.0)
 	player.noise_made.connect(creature.hear_noise)
 
 	if fresh:
