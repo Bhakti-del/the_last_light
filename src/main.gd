@@ -5,12 +5,8 @@ extends Node3D
 
 const SURFACE_BY_FLOOR := {"wood": "step_wood", "concrete": "step_concrete"}
 
-## Moonlight leaking through the house. Not a light source you can point at —
-## just enough for the eye to find edges and read a silhouette, so a player with
-## the torch off is lost rather than blind.
 const AMBIENT := Color(0.42, 0.52, 0.72)
 const AMBIENT_ENERGY := 0.16
-const AMBIENT_ENERGY_KID := 0.30
 
 var world: Node3D = null
 var level: LevelBuilder = null
@@ -39,15 +35,11 @@ func _ready() -> void:
 	sequence.finished.connect(_on_sequence_finished)
 	GameState.player_caught.connect(_on_player_caught)
 	GameState.run_sequence.connect(_on_run_sequence)
-	GameState.kid_mode_changed.connect(_on_kid_mode_changed)
 
 	_start_attempt(true)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
-## A cool ambient floor under the practical lights. GL Compatibility supports
-## ambient from an environment fine; what it does not support is volumetric fog,
-## which is why the torch fakes its own beam cone instead.
 func _build_environment() -> void:
 	_env = WorldEnvironment.new()
 	var e := Environment.new()
@@ -58,23 +50,6 @@ func _build_environment() -> void:
 	e.ambient_light_energy = AMBIENT_ENERGY
 	_env.environment = e
 	add_child(_env)
-
-
-func _on_kid_mode_changed(on: bool) -> void:
-	if _env != null and _env.environment != null:
-		_env.environment.ambient_light_energy = AMBIENT_ENERGY_KID if on else AMBIENT_ENERGY
-	if level != null:
-		level.apply_kid_mode(on)
-	if player != null:
-		player.interactor.apply_kid_mode(on)
-		player.flashlight.apply_kid_mode(on)
-	# Both notes are the things a small player would otherwise be stuck on: how
-	# to operate the game, and the one answer the game hides on a dark wall.
-	GameState.add_journal("HOW TO PLAY: WASD or the ARROW KEYS move and look. "
-		+ "E uses things. F is the torch. ESC pauses.")
-	GameState.add_journal("THE THREE DIALS: 1 = EYE, 2 = MOON, 3 = WAVE.")
-
-
 
 
 # ============================================================ world lifecycle
@@ -121,10 +96,6 @@ func _start_attempt(fresh: bool) -> void:
 	GameState.set_objective_key("wake")
 
 	_update_ambience("")
-
-	# A restarted attempt must come back up in whatever mode the player chose,
-	# and the loop wipes the journal, so the plain-language notes go back in.
-	_on_kid_mode_changed(GameState.kid_mode)
 
 	if _started:
 		GameState.set_flag(GameState.KEY_TRANSITION, false)
@@ -233,7 +204,6 @@ func _room_at(pos: Vector3) -> String:
 	return ""
 
 
-## One ambience bed per part of the house: the basement hums, upstairs it drips.
 func _update_ambience(chapter: String) -> void:
 	var want: StringName = &"drone"
 	match chapter:
@@ -288,7 +258,6 @@ func _on_sequence_finished() -> void:
 	if true_ending:
 		hud.show_end(true)
 		return
-	# ...and wake up in the same bed.
 	GameState.push_notice("ATTEMPT #%d" % (47 + GameState.loops_completed - 1), 4.0)
 	_start_attempt(false)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

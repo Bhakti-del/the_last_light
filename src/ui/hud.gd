@@ -15,16 +15,8 @@ const DIM := Color(0.62, 0.60, 0.56)
 const PAPER := Color(0.86, 0.83, 0.75)
 const WARN := Color(0.92, 0.55, 0.30)
 
-## Kid mode scales every piece of interface text rather than shipping a second
-## set of layouts: same screens, bigger words.
-const KID_FONT_SCALE := 1.42
 const BUTTON_SIZE := Vector2(280, 44)
-const BUTTON_SIZE_KID := Vector2(340, 62)
-
 const KEYS := "WASD move   SHIFT run   CTRL crouch   E interact   F torch   TAB journal   ESC pause"
-## Kid mode leads with the arrow keys: no mouse needed, and one obvious verb per
-## key. Crouch still matters (the creature hunts by what it hears), so it stays.
-const KEYS_KID := "ARROW KEYS or WASD move   ARROW KEYS look   E use   F torch   CTRL hide   ESC pause"
 
 var _root: Control
 var _crosshair: Control
@@ -35,8 +27,6 @@ var _torch_label: Label
 var _torch_bar: ColorRect
 var _torch_fill: ColorRect
 var _keys_label: Label
-var _kid_toggle: CheckButton
-var _compass: Label
 
 var _journal: PanelContainer
 var _journal_list: VBoxContainer
@@ -50,10 +40,8 @@ var _death: Control
 var _end: Control
 var _end_body: Label
 
-## Every control whose font size is ours to scale, with the size it uses at 1x.
 var _fonts: Array = []
 var _buttons: Array[Button] = []
-var _font_scale: float = 1.0
 
 var _notice_time: float = 0.0
 var _title_time: float = 0.0
@@ -71,9 +59,7 @@ func _ready() -> void:
 	GameState.notice.connect(show_notice)
 	GameState.chapter_changed.connect(show_room_title)
 	GameState.open_document.connect(open_reader)
-	GameState.kid_mode_changed.connect(_on_kid_mode_changed)
 	_on_objective_changed(GameState.objective)
-	_on_kid_mode_changed(GameState.kid_mode)
 	set_process(true)
 
 
@@ -81,52 +67,11 @@ func is_blocking() -> bool:
 	return _active_overlay
 
 
-# ============================================================ kid mode
+# ============================================================ font helper
 
-## Registered instead of calling add_theme_font_size_override directly, so one
-## multiplier can resize the whole interface at runtime.
 func _font(node: Control, size: int) -> void:
 	node.add_theme_font_size_override("font_size", size)
 	_fonts.append([node, size])
-
-
-func apply_kid_mode(on: bool) -> void:
-	_font_scale = KID_FONT_SCALE if on else 1.0
-	for f in _fonts:
-		var node: Control = f[0]
-		if is_instance_valid(node):
-			node.add_theme_font_size_override("font_size", int(round(float(f[1]) * _font_scale)))
-	for b in _buttons:
-		if is_instance_valid(b):
-			b.custom_minimum_size = BUTTON_SIZE_KID if on else BUTTON_SIZE
-	_rebuild_crosshair(on)
-	if _kid_toggle != null and is_instance_valid(_kid_toggle):
-		_kid_toggle.set_pressed_no_signal(GameState.kid_mode)
-		_kid_toggle.custom_minimum_size = Vector2(BUTTON_SIZE.x, 40.0 * _font_scale)
-	if _keys_label != null and is_instance_valid(_keys_label):
-		_keys_label.text = KEYS_KID if on else KEYS
-	if _journal_open:
-		_rebuild_journal()
-
-
-func _on_kid_mode_changed(on: bool) -> void:
-	apply_kid_mode(on)
-
-
-func _rebuild_crosshair(kid: bool) -> void:
-	if _crosshair == null or not is_instance_valid(_crosshair):
-		return
-	for c in _crosshair.get_children():
-		c.queue_free()
-	var arm: float = 11.0 if kid else 7.0
-	var thick: float = 2.0 if kid else 1.0
-	for d in [Vector2(arm, thick), Vector2(thick, arm)]:
-		var r := ColorRect.new()
-		r.color = Color(1, 1, 1, 0.55 if kid else 0.42)
-		r.size = d
-		r.position = -d * 0.5
-		_crosshair.add_child(r)
-
 
 
 # ============================================================ construction
@@ -141,7 +86,6 @@ func _build() -> void:
 	_build_objective()
 	_build_torch()
 	_build_notice()
-	_build_compass()
 	_build_room_title()
 	_build_journal()
 	_build_reader()
@@ -156,7 +100,12 @@ func _build_crosshair() -> void:
 	_crosshair.set_anchors_preset(Control.PRESET_CENTER)
 	_crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_crosshair)
-	_rebuild_crosshair(GameState.kid_mode)
+	for d in [Vector2(7, 1), Vector2(1, 7)]:
+		var r := ColorRect.new()
+		r.color = Color(1, 1, 1, 0.42)
+		r.size = d
+		r.position = -d * 0.5
+		_crosshair.add_child(r)
 
 
 func _build_objective() -> void:
@@ -184,7 +133,6 @@ func _build_torch() -> void:
 	_torch_label.text = "LIGHT"
 	_torch_label.visible = false
 	_root.add_child(_torch_label)
-
 
 	_torch_bar = ColorRect.new()
 	_torch_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -230,41 +178,32 @@ func _build_room_title() -> void:
 	_root.add_child(_room_title)
 
 
-
-
-func _build_compass() -> void:
-	_compass = Label.new()
-	_compass.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_compass.position = Vector2(-180, 26)
-	_font(_compass, 15)
-	_compass.add_theme_color_override("font_color", DIM)
-	_compass.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	_compass.add_theme_constant_override("outline_size", 5)
-	_compass.text = "N  E  S  W"
-	_compass.visible = false   # compass removed from HUD
-	_root.add_child(_compass)
-
-
 func _build_journal() -> void:
 	_journal = _paper_panel()
 	_journal.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_journal.visible = false
 
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_journal.add_child(vbox)
+
 	var head := Label.new()
 	head.text = "HOUSE BOOK"
 	_font(head, 30)
 	head.add_theme_color_override("font_color", Color(0.14, 0.12, 0.11))
-	_journal.add_child(head)
+	vbox.add_child(head)
 
 	var rule := ColorRect.new()
 	rule.color = Color(0.16, 0.13, 0.12, 0.5)
 	rule.custom_minimum_size = Vector2(0, 2)
-	_journal.add_child(rule)
+	vbox.add_child(rule)
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_journal.add_child(scroll)
+	vbox.add_child(scroll)
 
 	_journal_list = VBoxContainer.new()
 	_journal_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -272,16 +211,16 @@ func _build_journal() -> void:
 	scroll.add_child(_journal_list)
 
 	var foot := Label.new()
-	foot.text = "[TAB] close"
+	foot.text = "TAB  —  close"
 	_font(foot, 16)
 	foot.add_theme_color_override("font_color", Color(0.35, 0.31, 0.28))
-	_journal.add_child(foot)
+	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(foot)
+
 	_root.add_child(_journal)
 
 
 func _build_reader() -> void:
-	# PanelContainer provides the paper background and margins.
-	# A VBoxContainer inside it stacks: title → rule → scroll(body) → rule → footer.
 	_reader = _paper_panel()
 	_reader.set_anchors_preset(Control.PRESET_CENTER)
 	_reader.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -307,7 +246,6 @@ func _build_reader() -> void:
 	rule.custom_minimum_size = Vector2(0, 2)
 	vbox.add_child(rule)
 
-	# ScrollContainer so long notes scroll instead of clipping.
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -411,37 +349,11 @@ func _build_pause() -> void:
 	box.add_child(t)
 
 	box.add_child(_menu_button("Resume", func() -> void: resume_requested.emit()))
-
-	# Off by default: the shipped game plays exactly as designed. Flipping this
-	# takes effect immediately, mid-run, without restarting the attempt.
-	_kid_toggle = CheckButton.new()
-	_kid_toggle.text = "Kid mode"
-	_font(_kid_toggle, 20)
-	_kid_toggle.custom_minimum_size = Vector2(BUTTON_SIZE.x, 40.0)
-	_kid_toggle.set_pressed_no_signal(GameState.kid_mode)
-	_kid_toggle.tooltip_text = "Bigger text, arrow-key looking, longer reach, " \
-		+ "a slower-draining torch, and puzzles that spell themselves out."
-	_kid_toggle.toggled.connect(_on_kid_toggled)
-	var kid_note := Label.new()
-	kid_note.text = "kid mode: bigger text, easier puzzles, arrow keys to look"
-	_font(kid_note, 14)
-	kid_note.add_theme_color_override("font_color", Color(0.56, 0.54, 0.50))
-	kid_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var kid_box := VBoxContainer.new()
-	kid_box.add_theme_constant_override("separation", 2)
-	kid_box.add_child(_kid_toggle)
-	kid_box.add_child(kid_note)
-	box.add_child(kid_box)
-
 	box.add_child(_menu_button("Restart attempt", func() -> void: restart_requested.emit()))
 	box.add_child(_menu_button("Quit", func() -> void: get_tree().quit()))
 
 	_pause.visible = false
 	_root.add_child(_pause)
-
-
-func _on_kid_toggled(on: bool) -> void:
-	GameState.set_kid_mode(on)
 
 
 func _build_death() -> void:
@@ -568,8 +480,7 @@ func hide_hud(on: bool) -> void:
 func _process(delta: float) -> void:
 	if _notice_time > 0.0:
 		_notice_time -= delta
-		var a := clampf(_notice_time, 0.0, 1.0)
-		_notice.modulate.a = a
+		_notice.modulate.a = clampf(_notice_time, 0.0, 1.0)
 	else:
 		_notice.modulate.a = move_toward(_notice.modulate.a, 0.0, delta * 2.5)
 
@@ -579,8 +490,6 @@ func _process(delta: float) -> void:
 	else:
 		_room_title.modulate.a = move_toward(_room_title.modulate.a, 0.0, delta * 2.0)
 
-
-	# Compass removed — no per-frame update needed.
 	if _title.visible:
 		var go := _title.find_child("GoLabel", true, false) as Label
 		if go != null:

@@ -10,6 +10,8 @@ var sequence_id: String = ""
 var sting: StringName = &""
 var sting_db: float = -8.0
 var subtitle: String = ""
+## If set, teleports the player to this world position when triggered.
+var teleport_to: Vector3 = Vector3(0, -9999, 0)
 
 var _fired: bool = false
 
@@ -63,3 +65,10 @@ func fire() -> void:
 		GameState.push_notice(subtitle, 3.2)
 	if sequence_id != "":
 		GameState.run_sequence.emit(sequence_id)
+	if teleport_to.y > -9998.0:
+		# Find the player body that entered and move it
+		for body in get_overlapping_bodies():
+			if body is Player:
+				body.global_position = teleport_to
+				body.velocity = Vector3.ZERO
+				break
